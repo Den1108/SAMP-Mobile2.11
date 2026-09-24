@@ -53,6 +53,12 @@ bool UI::initialize()
     m_buttonPanel->setPosition(UISettings::buttonPanelPos());
     m_buttonPanel->setVisible(false);
 
+    m_hud = new Hud();
+    this->addChild(m_hud);
+    m_hud->setFixedSize(ImVec2(ScaleX(300.f), ScaleY(140.f)));
+    m_hud->setPosition(ImVec2(ScaleX(40.f), ScaleY(40.f)));
+    m_hud->setVisible(false);
+
     m_voiceButton = new VoiceButton();
     this->addChild(m_voiceButton);
     m_voiceButton->setFixedSize(UISettings::buttonVoiceSize());

@@ -30,6 +30,8 @@
 #include "..//vendor/raknet/SingleProducerConsumer.h"
 #include "..//CDebugInfo.h"
 
+#include "samp_widgets/hud.h"   
+
 #pragma pack(push, 1)
 struct BUFFERED_COMMAND_TEXTDRAW
 {
@@ -53,6 +55,7 @@ public:
     Keyboard* keyboard() const { return m_keyboard; }
     Dialog* dialog() const { return m_dialog; }
     ButtonPanel* buttonpanel() const { return m_buttonPanel; }
+    Hud* hud() const { return m_hud; }
     PlayerTabList* playertablist() const { return m_playerTabList; }
     VoiceButton* voicebutton() const { return m_voiceButton; }
 
@@ -94,6 +97,7 @@ private:
     Spawn* m_spawn;
     Dialog* m_dialog;
     ButtonPanel* m_buttonPanel;
+    Hud* m_hud;
     PlayerTabList* m_playerTabList;
     VoiceButton* m_voiceButton;
     Label* label;
