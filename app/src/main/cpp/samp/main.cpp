@@ -57,6 +57,7 @@ uintptr_t g_libGTASA = 0x00;
 uintptr_t g_libSAMP = 0x00;
 
 void ApplyGlobalPatches();
+void InstallAntiAliasingHook();
 void ApplyPatches_level0();
 void ApplyMultiTouchPatches();
 void InstallGlobalHooks();
@@ -342,6 +343,7 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved)
 	//firebase::crashlytics::SetCustomKey("libc.so", str);
 
 	CHook::InitHookStuff();
+	InstallAntiAliasingHook();
 	InstallSpecialHooks();
 	ApplyPatches_level0();
     //SetUpGLHooks();
