@@ -5,26 +5,30 @@
 // поэтому порядок #include в gui.h не важен.
 //
 // Что показывает:
-//   - стеклянная панель справа сверху: здоровье, броня (+ голод/жажда, если включить)
+//   - слева сверху: пинг (цветной индикатор) и FPS
+//   - справа сверху: стеклянная панель (здоровье, броня, + голод/жажда, если включить)
 //   - под панелью: пилюля с деньгами и пилюля с патронами
-//   - время и дата справа снизу
 
 #include <algorithm>
 #include <cmath>
-#include <ctime>
+#include <cstdio>
 #include <string>
 #include "game/game.h"
-#include "game/Widgets/TouchInterface.h"
+#include "game/Timer.h"
+#include "net/netgame.h"
 
 extern CGame* pGame;
+extern CNetGame* pNetGame;
 
 class Hud : public Widget
 {
 public:
-    // Спрятать родной верхний правый блок GTA (деньги, полоски, иконка оружия).
-    // Если пропадёт иконка оружия, а она вам нужна - поставьте false
-    // и сдвиньте панель через kPanelRightFrac.
-    static constexpr bool  kHideNativePlayerInfo = true;
+    // Спрятать родной блок GTA (полоска здоровья, деньги, иконка оружия).
+    // Это тот же переключатель, что и pGame->DisplayHUD(false) - он напрямую
+    // отключает отрисовку родного CHud, а не просто прячет тач-кнопку,
+    // поэтому зелёный/красный "$0" и полоска пропадают по-настоящему.
+    // Если что-то из родного вам всё же нужно - поставьте false.
+    static constexpr bool  kHideNativeHud = true;
 
     // Где стоит панель: правый край как доля ширины экрана, верх в "единицах" (1 ед = 1/1080 высоты).
     static constexpr float kPanelRightFrac = 0.875f;
@@ -46,11 +50,16 @@ public:
         CPlayerPed* ped = pGame ? pGame->FindPlayerPed() : nullptr;
         if (!ped) return;
 
-        if (kHideNativePlayerInfo) hideNativePlayerInfo();
+        // Вызывается каждый кадр: другой код игры (смерть, телепорт,
+        // текстдравы в net/textdrawpool.cpp) может включать родной худ
+        // обратно, поэтому держим его выключенным постоянно.
+        if (kHideNativeHud) pGame->DisplayHUD(false);
 
         const ImVec2 disp = ImGui::GetIO().DisplaySize;
         const float  u    = disp.y / 1080.f;                 // масштаб под экран
         const float  fs   = UISettings::fontSize() * 0.5f;   // базовый размер текста
+
+        drawFpsPing(r, disp, u, fs);
 
         // ---------- панель статов ----------
         const float panelW = 400.f * u;
@@ -116,20 +125,49 @@ public:
             r->drawText(ImVec2(a0.x + 18.f * u, a0.y + 8.f * u),
                         ImColor(1.00f, 0.85f, 0.45f, 1.f), ammo, true, mfs);
         }
-
-        // ---------- время и дата ----------
-        std::time_t t = std::time(nullptr);
-        std::tm tmv{};
-        localtime_r(&t, &tmv);
-        char buf[32];
-        std::strftime(buf, sizeof(buf), "%H:%M   %d.%m.%Y", &tmv);
-        const std::string clock = buf;
-        const ImVec2 cts = r->calculateTextSize(clock, fs);
-        r->drawText(ImVec2(disp.x * 0.86f - cts.x, disp.y - cts.y - 10.f * u),
-                    ImColor(1.f, 1.f, 1.f, 0.75f), clock, true, fs);
     }
 
 private:
+    // FPS и пинг слева сверху, как на референсе (зелёный/жёлтый/красный
+    // индикатор качества соединения перед текстом). Обновляется 2 раза
+    // в секунду, чтобы цифры не мельтешили каждый кадр.
+    void drawFpsPing(ImGuiRenderer* r, const ImVec2& disp, float u, float fs)
+    {
+        const uint32_t now = CTimer::m_snTimeInMillisecondsNonClipped;
+        if (now - m_fpsLastUpdate > 500)
+        {
+            m_fpsLastUpdate = now;
+            m_fpsCached = std::clamp(CTimer::game_FPS, 0.f, 999.f);
+            m_pingCached = (pNetGame && pNetGame->GetPlayerPool())
+                         ? pNetGame->GetPlayerPool()->GetLocalPlayerPing() : 0;
+        }
+
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "PING: %d   FPS: %.0f", m_pingCached, m_fpsCached);
+        const std::string s = buf;
+        const float sfs = fs * 0.85f;
+        const ImVec2 ts = r->calculateTextSize(s, sfs);
+
+        const float dot = 9.f * u;
+        const float padX = 14.f * u, padY = 8.f * u;
+        const ImVec2 p0(12.f * u, 10.f * u);
+        const ImVec2 p1(p0.x + dot + 10.f * u + ts.x + padX * 2, p0.y + ts.y + padY * 2);
+
+        r->drawRect(p0, p1, ImColor(0.04f, 0.05f, 0.08f, 0.55f), true, 8.f * u);
+
+        // зелёный - хороший пинг, жёлтый - средний, красный - плохой
+        ImColor dotCol = m_pingCached <= 0   ? ImColor(0.6f, 0.6f, 0.6f, 1.f)
+                        : m_pingCached < 100 ? ImColor(0.30f, 0.90f, 0.35f, 1.f)
+                        : m_pingCached < 250 ? ImColor(0.95f, 0.80f, 0.20f, 1.f)
+                                             : ImColor(0.95f, 0.25f, 0.25f, 1.f);
+        const ImVec2 dc(p0.x + padX + dot * 0.5f, (p0.y + p1.y) * 0.5f);
+        r->drawRect(ImVec2(dc.x - dot * 0.5f, dc.y - dot * 0.5f),
+                    ImVec2(dc.x + dot * 0.5f, dc.y + dot * 0.5f), dotCol, true, dot * 0.5f);
+
+        r->drawText(ImVec2(p0.x + padX + dot + 10.f * u, p0.y + padY),
+                    ImColor(1.f, 1.f, 1.f, 0.95f), s, true, sfs);
+    }
+
     // Одна строка статов: [чип] [полоска] [число]
     void drawStat(ImGuiRenderer* r, ImVec2 pos, float w, float h,
                   const char* tag, float v01, float value,
@@ -181,14 +219,11 @@ private:
         return neg ? "-" + s : s;
     }
 
-    static void hideNativePlayerInfo()
-    {
-        if (!CTouchInterface::m_pWidgets) return;
-        CWidgetGta* w = CTouchInterface::m_pWidgets[WidgetIDs::WIDGET_PLAYER_INFO];
-        if (w) w->SetEnabled(false);
-    }
-
     float m_hunger = 100.f;
     float m_thirst = 100.f;
     bool  m_needs  = false;
+
+    uint32_t m_fpsLastUpdate = 0;
+    float    m_fpsCached     = 0.f;
+    int      m_pingCached    = 0;
 };
