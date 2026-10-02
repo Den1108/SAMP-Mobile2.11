@@ -15,10 +15,14 @@
 #include <string>
 #include "game/game.h"
 #include "game/Timer.h"
-#include "net/netgame.h"
 
 extern CGame* pGame;
-extern CNetGame* pNetGame;
+
+// Реализована в hud_ping.cpp - нельзя подключать net/netgame.h прямо
+// здесь: gui.h (который включает этот файл) сам подключается из
+// net/netgame.h -> net/textlabelpool.h, и получится цикл, где
+// CNetGame ещё не определён (ошибка "unknown type name 'CNetGame'").
+int GetHudPing();
 
 class Hud : public Widget
 {
@@ -138,8 +142,7 @@ private:
         {
             m_fpsLastUpdate = now;
             m_fpsCached = std::clamp(CTimer::game_FPS, 0.f, 999.f);
-            m_pingCached = (pNetGame && pNetGame->GetPlayerPool())
-                         ? pNetGame->GetPlayerPool()->GetLocalPlayerPing() : 0;
+            m_pingCached = GetHudPing();
         }
 
         char buf[48];
