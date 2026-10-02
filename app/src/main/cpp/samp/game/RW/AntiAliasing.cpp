@@ -17,6 +17,7 @@
 
 #include <EGL/egl.h>
 #include <cstdio>
+#include <initializer_list>
 #include "vendor/GlossHook/include/Gloss.h"
 
 typedef EGLBoolean (*eglChooseConfig_t)(EGLDisplay, const EGLint*, EGLConfig*, EGLint, EGLint*);
